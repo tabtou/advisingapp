@@ -40,6 +40,7 @@ use AdvisingApp\Ai\Enums\AiModel;
 use AdvisingApp\Ai\Models\Concerns\CanAddAssistantLicenseGlobalScope;
 use AdvisingApp\Ai\Observers\QnaAdvisorObserver;
 use AdvisingApp\ResourceHub\Models\ResourceHubArticle;
+use App\Features\RenameQnaAdvisorsFeature;
 use App\Models\BaseModel;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -62,6 +63,8 @@ class QnaAdvisor extends BaseModel implements HasMedia, Auditable
     use InteractsWithMedia;
     use SoftDeletes;
     use AuditableTrait;
+
+    protected $table = 'customer_advisors'; // Temporary measure for testing
 
     protected $fillable = [
         'archived_at',
@@ -102,7 +105,7 @@ class QnaAdvisor extends BaseModel implements HasMedia, Auditable
      */
     public function categories(): HasMany
     {
-        return $this->hasMany(QnaAdvisorCategory::class, 'qna_advisor_id');
+        return $this->hasMany(QnaAdvisorCategory::class, RenameQnaAdvisorsFeature::active() ? 'customer_advisor_id' : 'qna_advisor_id');
     }
 
     /**
@@ -113,7 +116,7 @@ class QnaAdvisor extends BaseModel implements HasMedia, Auditable
         return $this->hasManyThrough(
             QnaAdvisorQuestion::class,
             QnaAdvisorCategory::class,
-            'qna_advisor_id',
+            RenameQnaAdvisorsFeature::active() ? 'customer_advisor_id' : 'qna_advisor_id',
             'category_id',
             'id',
             'id'
