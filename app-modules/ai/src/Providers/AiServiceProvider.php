@@ -51,11 +51,11 @@ use AdvisingApp\Ai\Models\AiThreadFolder;
 use AdvisingApp\Ai\Models\CustomerAdvisorCategory;
 use AdvisingApp\Ai\Models\CustomerAdvisorFile;
 use AdvisingApp\Ai\Models\CustomerAdvisorLink;
+use AdvisingApp\Ai\Models\CustomerAdvisorQuestion;
 use AdvisingApp\Ai\Models\DataAdvisor;
 use AdvisingApp\Ai\Models\Prompt;
 use AdvisingApp\Ai\Models\PromptType;
 use AdvisingApp\Ai\Models\QnaAdvisor;
-use AdvisingApp\Ai\Models\QnaAdvisorQuestion;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
@@ -100,7 +100,7 @@ class AiServiceProvider extends ServiceProvider
             'customer_advisor_category' => CustomerAdvisorCategory::class,
             'customer_advisor_file' => CustomerAdvisorFile::class,
             'customer_advisor_link' => CustomerAdvisorLink::class,
-            'qna_advisor_question' => QnaAdvisorQuestion::class,
+            'customer_advisor_question' => CustomerAdvisorQuestion::class,
             'data_advisor' => DataAdvisor::class,
         ]);
 
