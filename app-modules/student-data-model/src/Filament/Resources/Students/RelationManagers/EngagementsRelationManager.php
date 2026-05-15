@@ -47,9 +47,12 @@ use AdvisingApp\Engagement\Models\EngagementResponse;
 use AdvisingApp\Notification\Enums\NotificationChannel;
 use AdvisingApp\Notification\Models\EmailMessageEvent;
 use AdvisingApp\Notification\Models\SmsMessageEvent;
+use AdvisingApp\Prospect\Models\Prospect;
+use AdvisingApp\StudentDataModel\Models\Student;
 use AdvisingApp\Timeline\Models\Timeline;
 use App\Features\EngagementResponseMarkAsActionedFeature;
 use App\Infolists\Components\EngagementBody;
+use Carbon\Carbon;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -201,10 +204,10 @@ class EngagementsRelationManager extends RelationManager
                         'timelineable' => function ($morphQuery) use ($canAccessEngagements, $canAccessEngagementResponses) {
                             $morphQuery->when(
                                 $canAccessEngagements && $morphQuery->getModel() instanceof Engagement,
-                                fn (Builder $query) => $query->with(['latestEmailMessage.events', 'latestSmsMessage.events'])
+                                fn (Builder $query) => $query->with(['latestEmailMessage.events', 'latestSmsMessage.events', 'user'])
                             )->when(
                                 $canAccessEngagementResponses && $morphQuery->getModel() instanceof EngagementResponse,
-                                fn (Builder $query) => $query->with('latestActionedNote')
+                                fn (Builder $query) => $query->with(['latestActionedNote', 'sender'])
                             );
                         },
                     ])
@@ -229,26 +232,65 @@ class EngagementsRelationManager extends RelationManager
                     })
                     ->badge()
                     ->tooltip(fn (Timeline $record): ?string => EngagementResponseMarkAsActionedFeature::active() && $record->timelineable::class === EngagementResponse::class && $record->timelineable->status === EngagementResponseStatus::Actioned ? $record->timelineable->latestActionedNote?->getActionedNoteTooltip() : null),
+                TextColumn::make('sent_by')
+                    ->label('Sent By')
+                    ->state(function (Timeline $record): ?string {
+                        $timelineable = $record->timelineable;
+
+                        if ($timelineable instanceof Engagement) {
+                            return $timelineable->user?->name;
+                        }
+
+                        if ($timelineable instanceof EngagementResponse) {
+                            $sender = $timelineable->sender;
+
+                            if ($sender instanceof Student || $sender instanceof Prospect) {
+                                return $sender->full_name;
+                            }
+                        }
+
+                        return null;
+                    })
+                    ->description(function (Timeline $record): ?string {
+                        $timelineable = $record->timelineable;
+
+                        if ($timelineable instanceof Engagement) {
+                            return 'User';
+                        }
+
+                        if ($timelineable instanceof EngagementResponse) {
+                            $sender = $timelineable->sender;
+
+                            if ($sender instanceof Student) {
+                                return 'Student';
+                            }
+
+                            if ($sender instanceof Prospect) {
+                                return 'Prospect';
+                            }
+                        }
+
+                        return null;
+                    }),
+                TextColumn::make('type')
+                    ->state(function (Timeline $record) {
+                        /** @var HasDeliveryMethod $timelineable */
+                        $timelineable = $record->timelineable;
+
+                        return $timelineable->getDeliveryMethod();
+                    })
+                    ->icon(fn (NotificationChannel $state) => $state->getIcon())
+                    ->tooltip(fn (NotificationChannel $state): string => $state->getLabel())
+                    ->formatStateUsing(fn (): string => ''),
                 TextColumn::make('subject')
                     ->label('Preview')
                     ->description(
-                        function (Timeline $record): ?string {
-                            $timelineable = $record->timelineable;
+                        function (Timeline $record): HtmlString {
+                            $date = Carbon::parse($record->record_sortable_date);
 
-                            $isEmail = (
-                                ($timelineable instanceof Engagement && $timelineable->channel === NotificationChannel::Email) ||
-                                ($timelineable instanceof EngagementResponse && $timelineable->type === EngagementResponseType::Email)
+                            return new HtmlString(
+                                e($date->format('M j, Y')) . '<br>' . e($date->format('g:i a (T)'))
                             );
-
-                            if ($isEmail && filled($body = $timelineable->getBody())) {
-                                if ($timelineable instanceof Engagement) {
-                                    return Str::limit($timelineable->getBodyText(), 50);
-                                }
-
-                                return Str::limit(html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 50);
-                            }
-
-                            return null;
                         }
                     )
                     ->state(fn (Timeline $record) => match ($record->timelineable::class) {
@@ -261,23 +303,14 @@ class EngagementsRelationManager extends RelationManager
 
                         default => '',
                     }),
-                TextColumn::make('type')
-                    ->state(function (Timeline $record) {
-                        /** @var HasDeliveryMethod $timelineable */
-                        $timelineable = $record->timelineable;
-
-                        return $timelineable->getDeliveryMethod();
-                    }),
-                TextColumn::make('record_sortable_date')
-                    ->label('Date')
-                    ->dateTime()
-                    ->sortable(),
             ])
             ->headerActions([
                 RelationManagerSendEngagementAction::make(),
             ])
+            ->recordAction(ViewAction::class)
             ->recordActions([
                 ViewAction::make()
+                    ->hidden()
                     ->slideOver()
                     ->modalHeading(function (Timeline $record): Htmlable {
                         $status = match ($record->timelineable::class) {
